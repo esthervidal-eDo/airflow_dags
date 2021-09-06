@@ -1,0 +1,53 @@
+default: &DEFAULT
+  team: "ds-data"
+  topic: "etl"
+  subtopic: "tracking-system"
+
+variables:
+  schedule_interval: "* * * * *"
+  start_date:
+    year: 2020
+    month: 10
+    day: 1
+  catchup: False
+  default_args:
+    depends_on_past: False
+    retries: 4
+    owner: tracking_system
+    retry_delay:
+      minutes: 30
+structure:
+  operators:
+    gke_tracking_system:
+      operator_kind: "gke_operator"
+      docker_image_name: "TRACKING_SYSTEM_V2"
+      node_pool: "n1-standard-4"
+      secrets:
+        google-secret: "GOOGLE_APPLICATION_CREDENTIALS"
+      env_vars:
+        EXECUTION_DATE: "{{  ds }}"
+        INPUT_RESOURCES: "/app/resources/tracking_system"
+        PROCESS_PATH: "/app/processes/"
+        ENVIRONMENT_INFRA: "prod"
+        SLACK_URL: "{{ var.value.TRACKING_SYSTEM_SLACK_URL }}"
+        OUTPUT_FOLDER: output
+      airflow_vars:
+        - PROJECT
+        - PIPELINER_SERVER
+        - DATAPROC_IMAGE
+      command: [ "bash", "/app/processes/run_monitoring.sh" ]
+      arguments:
+        - "generate_data"
+        - "{{ params.module }}"
+        - "{{ params.event }}"
+        - "{{ execution_date.strftime('%H') }}"
+        - "{{ task_instance.try_number }}"
+        - "{{ params.table_id }}"
+        - "{{ ds }}"
+  tasks:
+    summary_ts_event:
+      step_argument: monitoring-calculate_hourly_summary_ts_event
+      operator: gke_tracking_system
+      labels:
+        <<: *DEFAULT
+        task: "summary_ts_event"
